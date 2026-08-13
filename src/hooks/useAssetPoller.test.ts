@@ -33,6 +33,14 @@ function errorResponse(status = 500) {
   } as unknown as Response
 }
 
+/**
+ * ok 는 false 지만 본문은 정상 스냅샷으로 파싱되는 응답.
+ * `!response.ok` 가드가 사라지면 이 본문이 그대로 data 로 흘러들어간다.
+ */
+function errorResponseWithBody(body: AssetSnapshot, status = 500) {
+  return { ok: false, status, json: async () => body } as unknown as Response
+}
+
 /** 가짜 타이머를 진행시키면서 그 사이에 생긴 프라미스 체인까지 flush 한다. */
 async function advance(ms: number) {
   await act(async () => {
@@ -165,6 +173,40 @@ describe('useAssetPoller', () => {
       expect(result.current.data).toBeNull()
     })
 
+    it('ok 가 false 이면 본문이 정상 스냅샷이어도 data 로 반영하지 않는다', async () => {
+      // 기존 "ok 가 false" 테스트는 json() 이 throw 하는 응답을 쓰기 때문에,
+      // ok 검사를 없애도 catch 로 흡수되어 결과가 같다. 본문을 파싱 가능하게 두면
+      // "상태 코드로 걸러낸다"는 계약만 남아 가드 제거를 잡아낼 수 있다.
+      const body = snapshot({ battery: 5, timestamp: 9_000 })
+      fetchMock.mockResolvedValue(errorResponseWithBody(body, 503))
+      const { result } = renderHook(() => useAssetPoller())
+
+      act(() => result.current.startPolling('AGV-001', 1_000))
+      await advance(1_000)
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(result.current.data).toBeNull()
+    })
+
+    it('ok 가 false 인 응답의 timestamp 는 최신 기준값을 오염시키지 않는다', async () => {
+      // 실패 응답이 latestTimestamp 를 9_000 으로 올려버리면
+      // 뒤이은 정상 응답(1_000)이 "오래된 응답"으로 오인되어 버려진다.
+      fetchMock
+        .mockResolvedValueOnce(errorResponseWithBody(snapshot({ battery: 5, timestamp: 9_000 }), 500))
+        .mockResolvedValueOnce(okResponse(snapshot({ battery: 42, timestamp: 1_000 })))
+      const { result } = renderHook(() => useAssetPoller())
+
+      act(() => result.current.startPolling('AGV-001', 1_000))
+      await advance(1_000)
+      expect(result.current.data).toBeNull()
+
+      await advance(1_000)
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(result.current.data?.battery).toBe(42)
+      expect(result.current.data?.timestamp).toBe(1_000)
+    })
+
     it('네트워크 오류가 나도 폴링을 멈추지 않고 이후 성공 응답을 반영한다', async () => {
       fetchMock
         .mockRejectedValueOnce(new Error('network down'))
@@ -205,6 +247,25 @@ describe('useAssetPoller', () => {
       await advance(1_000)
 
       expect(result.current.data?.battery).toBe(10)
+    })
+
+    it('비교 기준이 없는 첫 응답은 timestamp 가 음수여도 반영한다', async () => {
+      // latestTimestamp 가 null 인 동안에는 비교 자체를 하지 않아야 한다.
+      // null 검사를 빼면 `timestamp < null` 이 `timestamp < 0` 으로 평가되어
+      // 음수 timestamp 를 가진 첫 응답이 조용히 버려진다.
+      fetchMock
+        .mockResolvedValueOnce(okResponse(snapshot({ battery: 60, timestamp: -1_000 })))
+        .mockResolvedValueOnce(okResponse(snapshot({ battery: 55, timestamp: -500 })))
+      const { result } = renderHook(() => useAssetPoller())
+
+      act(() => result.current.startPolling('AGV-001', 1_000))
+      await advance(1_000)
+      expect(result.current.data?.battery).toBe(60)
+      expect(result.current.data?.timestamp).toBe(-1_000)
+
+      // 첫 응답이 기준값이 된 뒤에는 평소대로 더 최신 응답이 반영된다.
+      await advance(1_000)
+      expect(result.current.data?.battery).toBe(55)
     })
 
     it('이전 요청이 끝나기 전에는 새 요청을 보내지 않는다', async () => {
