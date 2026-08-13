@@ -35,3 +35,124 @@
 - equivalent 15 / 저가치 3 / 실질적 3
 - 유효 뮤턴트 63개(78 − equivalent 15) 중 생존 6개, 유효 점수 90.5%
 - 실질적 구멍은 #44·#45가 같은 줄(L23)이라 실제로는 2개 지점
+
+---
+
+# 2회차 결과
+
+## 조건
+
+- **A**: 1회차 생존 뮤턴트 중 실질적으로 판단한 3개(#44, #45, #82) 목록을 제공하고 보강 요청
+- **B**: 목록 없이 "테스트를 더 강화해달라"만 요청
+- 두 조건 모두 1회차 상태(`4eee703`)에서 분기, 소스 파일 무수정
+  (변경 파일은 양쪽 모두 `src/hooks/useAssetPoller.test.ts` 하나뿐 — A +61줄, B +414줄)
+- RESULTS.md / NOTES.md / reports 는 읽지 않도록 지시
+
+## 점수
+
+`src/hooks/useAssetPoller.ts` 기준 (전체 뮤턴트 78개)
+
+| 회차 | 점수 | killed | survived | 테스트 개수 | 추가된 테스트 |
+| --- | --- | --- | --- | --- | --- |
+| 1회차 | 73.08% | 57 | 21 | 24 | — |
+| 2회차 A | 76.92% | 60 | 18 | 27 | +3 |
+| 2회차 B | 78.21% | 61 | 17 | 46 | +22 |
+
+`src/components/AssetStatusCard.tsx`는 세 시점 모두 39/39 killed(100%)이며 테스트 파일도
+1회차 그대로(15개)라 비교에서 제외한다. 프로젝트 전체 점수는 1회차 82.05%(96/117),
+A 84.62%(99/117), B 85.47%(100/117).
+
+> 1회차 수치 출처: `reports/`가 gitignore 대상이라 `reports/mutation/mutation.json`은
+> 2회차 A 실행 결과로 덮어써졌다. 위 1회차 값은 이 문서 상단에 기록된 실측 카운트
+> (전체 117 / killed 96 / survived 21, 전부 useAssetPoller)와 A·B 리포트의 파일별
+> 뮤턴트 수(AssetStatusCard 39 / useAssetPoller 78)에서 산출했다.
+> A·B 수치는 `/tmp/round2-a.json`, `/tmp/round2-b.json`에서 직접 읽었다.
+
+## 뮤턴트 단위 비교
+
+두 리포트는 동일한 117개 뮤턴트(id·위치·뮤테이터·치환값 모두 일치)를 대상으로 해
+id 기준 1:1 비교가 가능하다. 차이가 난 7개는 전부 `src/hooks/useAssetPoller.ts`에 있다.
+
+### A에서만 죽은 것 (3개)
+
+| id | 파일:라인 | 뮤테이터 | 원본 코드 | 변형된 코드 |
+| --- | --- | --- | --- | --- |
+| #44 | `src/hooks/useAssetPoller.ts:23` | ConditionalExpression | `!response.ok` | `false` |
+| #45 | `src/hooks/useAssetPoller.ts:23` | BlockStatement | `` { throw new Error(`Failed to fetch asset ${assetId}: ${response.status}`) } `` | `{}` |
+| #82 | `src/hooks/useAssetPoller.ts:65` | ConditionalExpression | `latestTimestamp !== null` | `true` |
+
+1회차에서 "실질적 구멍"으로 분류해 A에 제시한 3개와 정확히 일치한다. A는 제시된 목록을
+전부 잡았고, 목록 밖에서는 추가로 잡은 것이 없다.
+
+### B에서만 죽은 것 (4개)
+
+| id | 파일:라인 | 뮤테이터 | 원본 코드 | 변형된 코드 |
+| --- | --- | --- | --- | --- |
+| #61 | `src/hooks/useAssetPoller.ts:45` | ConditionalExpression | `prev.status === 'Stale'` | `false` |
+| #63 | `src/hooks/useAssetPoller.ts:45` | StringLiteral | `'Stale'` | `""` |
+| #91 | `src/hooks/useAssetPoller.ts:75` | ConditionalExpression | `controllerRef.current === controller` | `true` |
+| #93 | `src/hooks/useAssetPoller.ts:75` | EqualityOperator | `controllerRef.current === controller` | `controllerRef.current !== controller` |
+
+1회차에서 #61·#63은 "저가치", #91·#93은 "equivalent"로 분류했던 것들이다.
+즉 B는 A에 제시한 실질적 구멍 3개는 하나도 건드리지 못했고, 대신 사람이
+가치 없다고 판단해 목록에서 제외한 영역을 잡았다.
+
+### 둘 다 죽인 것
+
+96개. (AssetStatusCard 39개 + useAssetPoller 57개 — 1회차에서 이미 죽은 것들)
+
+### 둘 다 생존한 것 (14개)
+
+| id | 파일:라인 | 뮤테이터 |
+| --- | --- | --- |
+| #46 | `src/hooks/useAssetPoller.ts:24` | StringLiteral |
+| #48 | `src/hooks/useAssetPoller.ts:36` | BooleanLiteral |
+| #50 | `src/hooks/useAssetPoller.ts:40` | ConditionalExpression |
+| #66 | `src/hooks/useAssetPoller.ts:47` | ArrayDeclaration |
+| #71 | `src/hooks/useAssetPoller.ts:51` | ConditionalExpression |
+| #88 | `src/hooks/useAssetPoller.ts:71` | BlockStatement |
+| #92 | `src/hooks/useAssetPoller.ts:75` | ConditionalExpression |
+| #94 | `src/hooks/useAssetPoller.ts:75` | BlockStatement |
+| #95 | `src/hooks/useAssetPoller.ts:79` | ArrayDeclaration |
+| #97 | `src/hooks/useAssetPoller.ts:82` | ConditionalExpression |
+| #101 | `src/hooks/useAssetPoller.ts:86` | ConditionalExpression |
+| #110 | `src/hooks/useAssetPoller.ts:95` | ArrayDeclaration |
+| #113 | `src/hooks/useAssetPoller.ts:106` | ArrayDeclaration |
+| #115 | `src/hooks/useAssetPoller.ts:109` | ArrayDeclaration |
+
+1회차 분류 기준으로 equivalent 13 / 저가치 1(#46) / 실질적 0이다.
+
+### 교집합
+
+**A가 새로 죽인 3개와 B가 새로 죽인 4개의 교집합은 0이다.** 두 조건이 잡은 뮤턴트는
+단 하나도 겹치지 않았다. 테스트를 22개 추가한 B와 3개만 추가한 A가 점수상으로는
+1.29%p 차이(78.21% vs 76.92%)지만, 실제로 커버한 영역은 완전히 분리되어 있다.
+두 테스트 세트를 합치면 생존 뮤턴트는 14개(82.05%)까지 내려간다.
+
+## B가 부수적으로 발견한 소스 결함
+
+B는 뮤턴트 목록 없이 훅의 동작을 직접 파고들다가 `runFetch`의 `finally` 블록에서
+결함을 발견했다.
+
+```ts
+// src/hooks/useAssetPoller.ts:73-78
+} finally {
+  isFetchingRef.current = false
+  if (controllerRef.current === controller) {
+    controllerRef.current = null
+  }
+}
+```
+
+`controllerRef.current`는 자기 자신일 때만 정리하도록 가드가 걸려 있는데,
+`isFetchingRef.current = false`에는 같은 가드가 없어 **무조건** 실행된다.
+따라서 abort된 이전 요청이 뒤늦게 settle하면, 더 새로운 요청이 진행 중인데도
+in-flight 플래그가 풀려 중첩 요청이 발생한다. 이는 요구사항 2("동시 요청은 항상
+최대 1개")의 위반이다.
+
+이 결함은 1회차 생존 뮤턴트 목록에는 드러나지 않았던 것이며, 목록을 제공받은 A는
+발견하지 못했다.
+
+**실험 기준점 유지를 위해 소스는 수정하지 않았다.** 2·3회차의 모든 회차가 동일한
+`src/hooks/useAssetPoller.ts`를 대상으로 해야 뮤턴트 id와 점수를 비교할 수 있기 때문이다.
+수정은 실험 종료 후 별도 커밋으로 다룬다.
