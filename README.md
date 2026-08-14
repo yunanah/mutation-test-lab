@@ -1,32 +1,103 @@
-# React + TypeScript + Vite
+# mutation-test-lab
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AI가 생성한 프론트엔드 테스트가 실제로 무엇을 지키는지, 뮤테이션 테스팅으로 확인해본 기록.
 
-Currently, two official plugins are available:
+## **전체 글: [실험 기록 전문](https://mica-halloumi-e31.notion.site/AI-AI-3bc5b2e1676480a4b703c232cacb6a15?source=copy_link)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 무엇을 확인했나
 
-## React Compiler
+AI에게 테스트를 맡기면 커버리지는 잘 나온다. 그런데 그 테스트가 실제로 코드를 지키고 있는지는 별개다.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+뮤테이션 테스팅으로 확인하고, **살아남은 뮤턴트 목록을 알려주는 경우(A)와 알려주지 않는 경우(B)** 를 비교했다.
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 결과
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 1회차 — 구현 코드만 주고 테스트 생성
+
+|                       | 뮤턴트 | 검출 | 생존 | 점수    |
+| --------------------- | ------ | ---- | ---- | ------- |
+| `AssetStatusCard.tsx` | 39     | 39   | 0    | 100.00% |
+| `useAssetPoller.ts`   | 78     | 57   | 21   | 73.08%  |
+| 전체                  | 117    | 96   | 21   | 82.05%  |
+
+생존 21개를 분류한 결과:
+
+- 검출할 방법이 없는 것 15
+- 검출은 가능하나 실익이 없는 것 4
+- **실질적 구멍 2** (같은 줄이라 1개 지점)
+
+### 2회차 — A / B 비교
+
+| 조건                        | 추가된 테스트 | 점수       | 생존 |
+| --------------------------- | ------------- | ---------- | ---- |
+| 1회차                       | —             | 73.08%     | 21   |
+| A (생존 뮤턴트 목록 제공)   | 3             | 76.92%     | 18   |
+| B (목록 없이 "더 강화해줘") | 22            | **78.21%** | 17   |
+
+**두 조건이 검출한 뮤턴트는 하나도 겹치지 않았다.**
+
+| A만 | B만 | 둘 다 | 둘 다 생존 |
+| --- | --- | ----- | ---------- |
+| 3   | 4   | 96    | 14         |
+
+---
+
+## 관찰된 것
+
+- **점수와 실제 검증력은 다르다.** 73.08%였지만 생존 21개 중 15개는 검출 불가능한 변형이었다
+- **점수가 높은 쪽이 더 나은 게 아니었다.** B가 점수는 높았으나 실질적 구멍을 메운 건 A뿐
+- **생존 뮤턴트 분류는 자동화되지 않는다.** 분류 판정을 세 번 정정했다
+- **뮤테이션이 완전한 목록은 아니다.** B는 뮤테이션으로는 드러나지 않는 원본 코드의 버그를 발견했다
+
+---
+
+## 구조
+
+```
+src/
+  components/AssetStatusCard.tsx    화면 컴포넌트
+  hooks/useAssetPoller.ts           비동기 폴링 훅
+NOTES.md                            실험 조건과 요구사항 명세
+RESULTS.md                          생존 뮤턴트 분류와 2회차 결과
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 브랜치
+
+|            |                |
+| ---------- | -------------- |
+| `main`     | 1회차 (기준점) |
+| `round2-a` | 목록 제공 조건 |
+| `round2-b` | 목록 없음 조건 |
+
+---
+
+## 재현
+
+```bash
+npm install
+npm test          # 테스트 실행
+npm run mutate    # 뮤테이션 테스팅
+```
+
+리포트는 `reports/mutation/mutation.html`에 생성된다.
+`reports/`는 gitignore 대상이라 다음 실행 시 덮어써지므로, 비교가 필요하면 실행 직후 복사해둘 것.
+
+---
+
+## 쓴 도구
+
+- 요구사항 명세: Gemini
+- 코드 및 테스트 생성: Claude Code (모델: `[버전 기입]`)
+- 뮤테이션 테스팅: Stryker + `@stryker-mutator/vitest-runner`
+- 테스트: Vitest, `@testing-library/react`
+- 실행 시점: 2026년 8월
+
+---
+
+## 한계
+
+대상 코드 2개, 모델 1개, 각 조건 1회 측정. 통계적 유의성 없음.
+분류 판정 중 "검출 불가능"으로 본 2개가 이후 실제로 검출되어, 유효 점수 계산도 잠정적이다.
+뮤테이션 피드백 루프 자체는 이미 연구된 영역이며(MuTAP 등), 새로운 발견을 주장하지 않는다.
