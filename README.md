@@ -2,7 +2,7 @@
 
 AI가 생성한 프론트엔드 테스트가 실제로 무엇을 지키는지, 뮤테이션 테스팅으로 확인해본 기록.
 
-## **전체 글: [실험 기록 전문](https://mica-halloumi-e31.notion.site/AI-AI-3bc5b2e1676480a4b703c232cacb6a15?source=copy_link)**
+## **전체 글: [AI가 짠 테스트를 같은 AI한테 고치라고 하면 나아질까](https://mica-halloumi-e31.notion.site/AI-AI-3bc5b2e1676480a4b703c232cacb6a15?source=copy_link)**
 
 ## 무엇을 확인했나
 
@@ -89,7 +89,7 @@ npm run mutate    # 뮤테이션 테스팅
 ## 쓴 도구
 
 - 요구사항 명세: Gemini
-- 코드 및 테스트 생성: Claude Code (모델: `[버전 기입]`)
+- 코드 및 테스트 생성: Claude Code (모델: `[2.1.231 (Claude Code)]`)
 - 뮤테이션 테스팅: Stryker + `@stryker-mutator/vitest-runner`
 - 테스트: Vitest, `@testing-library/react`
 - 실행 시점: 2026년 8월
